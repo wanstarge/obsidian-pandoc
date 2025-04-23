@@ -21,3 +21,4 @@
 - [@OliverBalfour](https://github.com/OliverBalfour)
 - Jan Losinski ([@janLo](https://github.com/janLo))
 - Phillip Johnston ([@phillipjohnston](https://github.com/phillipjohnston))
+- Wanstarge ([@wanstarge](<https://github.com/phillipjohnston>))
