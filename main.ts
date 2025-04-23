@@ -32,7 +32,7 @@ export default class PandocPlugin extends Plugin {
 
         // Register all of the command palette entries
         this.registerCommands();
-
+        // transfrom the subject to settings tab
         this.addSettingTab(new PandocPluginSettingTab(this.app, this));
     }
 
@@ -79,7 +79,46 @@ export default class PandocPlugin extends Plugin {
         }
         return false;
     }
-
+    dealRelativePath(args: string[]): string[] {
+      args = args.map(arg => {
+          // Handle arguments with equals sign, like --lua-filter=template/pandoc/zotero.lua
+          if (arg.includes('=')) {
+              const [prefix, filePath] = arg.split('=', 2);
+              // Check if the path part after the equals contains path separators
+              if (filePath.includes('/') || filePath.includes('\\')) {
+                  // Check if it's an absolute path
+                  if (
+                      filePath.startsWith('/') ||
+                      filePath.startsWith('\\') ||
+                      /^[A-Za-z]:/.test(filePath)
+                  ) {
+                      return arg; // Absolute path, leave unchanged
+                  } else {
+                      // Relative path, add vault base path
+                      return `${prefix}=${path.join(this.vaultBasePath(), filePath)}`;
+                  }
+              }
+              return arg; // Arguments without path separators remain unchanged
+          }
+          // Handle regular arguments
+          else if (arg.includes('/') || arg.includes('\\')) {
+              // Check if it's an absolute path or an option argument
+              if (
+                  arg.startsWith('/') ||
+                  arg.startsWith('\\') ||
+                  arg.startsWith('-') ||
+                  /^[A-Za-z]:/.test(arg)
+              ) {
+                  return arg; // Absolute path or option argument, leave unchanged
+              } else {
+                  // Relative path, add vault base path
+                  return path.join(this.vaultBasePath(), arg);
+              }
+          }
+          return arg; // Other arguments remain unchanged
+      });
+      return args;
+    }
     async createBinaryMap() {
         this.features['pandoc'] = this.settings.pandoc || await lookpath('pandoc');
         this.features['pdflatex'] = this.settings.pdflatex || await lookpath('pdflatex');
@@ -98,7 +137,7 @@ export default class PandocPlugin extends Plugin {
             outputFile = path.join(this.settings.outputFolder, path.basename(outputFile));
         }
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-        
+        const args = this.dealRelativePath(this.settings.extraArguments.split('\n'));
         try {
             let error, command;
 
@@ -123,7 +162,7 @@ export default class PandocPlugin extends Plugin {
                                 directory: path.dirname(inputFile),
                             },
                             { file: outputFile, format },
-                            this.settings.extraArguments.split('\n')
+                            args
                         );
                         error = result.error;
                         command = result.command;
@@ -131,14 +170,30 @@ export default class PandocPlugin extends Plugin {
                     break;
                 }
                 case 'md': {
+                    const contentFile = temp.path();
+                    let contents = fs.readFileSync(inputFile, 'utf8');
+                    contents = contents.replace(/!\[\[(.*?)\/([^|\]]*?)(\|[^\]]*?)?\]\]/g, function(match, p1, p2, p3) {
+                        p3 = p3 || '';  // if p3 is undefined, set it to an empty string
+                        if (p3) {
+                            // deal ![[folder/image.png|alt text]]
+                            return `![${p3.substring(1)}](${p1}/${p2})`;
+                        }
+                        // deal ![[folder/image.png]]
+                        return `![${p2}](${p1}/${p2})`;
+                    });
+                    contents = contents.replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g, function(match, p1, p2, p3) {
+                        const displayText = p3 || p1;
+                        return `[${displayText}](${p1})`;
+                    });
+                    fs.writeFileSync(contentFile, contents);
                     const result = await pandoc(
                         {
-                            file: inputFile, format: 'markdown',
+                            file: contentFile, format: 'markdown',
                             pandoc: this.settings.pandoc, pdflatex: this.settings.pdflatex,
                             directory: path.dirname(inputFile),
                         },
                         { file: outputFile, format },
-                        this.settings.extraArguments.split('\n')
+                        args
                     );
                     error = result.error;
                     command = result.command;

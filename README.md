@@ -1,5 +1,7 @@
 ## Obsidian Pandoc Plugin
 
+[中文](README-CN.md)
+
 This is a Pandoc export plugin for Obsidian (https://obsidian.md).
 
 It adds command palette options to export your notes to a variety of formats including Word Documents, PDFs, ePub books, HTML websites, PowerPoints and LaTeX among (many) others. This is all thanks to [Pandoc](https://pandoc.org/).
